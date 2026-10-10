@@ -26,18 +26,21 @@ const nav = () => {
   const r = S.user.role;
   const l = [['home', 'Dashboard'], ['find', 'Find Blood']];
   if (r === 'PATIENT' || r === 'STAFF') l.push(['new', 'New Request']);
-  if (r === 'STAFF' || r === 'ADMIN') l.push(['inventory', 'Inventory'], ['donors', 'Donors']);
+  if (r === 'STAFF' || r === 'ADMIN') l.push(['inventory', 'Inventory'], ['donors', 'Donors'], ['transfers', 'Transfers']);
   if (r === 'DONOR') l.push(['invites', 'Invitations'], ['history', 'My Donations']);
+  l.push(['organ', r === 'DONOR' ? 'Organ Pledge' : 'Organ Requests']);
+  if (r === 'ADMIN') l.push(['users', 'Users'], ['audit', 'Audit Logs']);
   l.push(['notes', 'Notifications']);
   return l;
 };
 function shell(active, html) {
   $('#app').innerHTML = `<header><b>🩸 JEEVANDAN</b>${nav().map(([k, t]) => `<a href="#/${k}" class="${k === active ? 'on' : ''}">${t}</a>`).join('')}
-    <span class="sp"></span><span>${esc(S.user.full_name)} (${esc(S.user.role)})</span><a href="#/logout" data-logout>Logout</a></header><main>${html}</main>`;
+    <span class="sp"></span><span>${esc(S.user.full_name)} (${esc(S.user.role)})</span><a href="#/profile" class="${active === 'profile' ? 'on' : ''}">Profile</a><a href="#/logout" data-logout>Logout</a></header><main>${html}</main>`;
 }
 
 function authView(mode) {
   const reg = mode === 'register';
+  const demoBtns = [['Admin', 'admin'], ['Staff 1', 'staff1'], ['Staff 2', 'staff2'], ['Donor 1', 'donor1'], ['Patient 1', 'patient1']].map(([l, e]) => `<button type="button" class="sec" data-demo="${e}@jeevandan.test">${l}</button>`).join('');
   $('#app').innerHTML = `<div class="auth card"><h2>🩸 JEEVANDAN</h2><p class="mut">Blood &amp; Organ Donation Management</p>
   <form id="af">${reg ? `<label>I am a</label><select name="role" id="role"><option value="DONOR">Donor</option><option value="PATIENT">Patient / Requester</option></select>
   <label>Full name</label><input name="full_name" required><label>Phone</label><input name="phone" required>` : ''}
@@ -47,7 +50,8 @@ function authView(mode) {
   <div class="row"><div><label>Date of birth</label><input type="date" name="date_of_birth"></div><div><label>Weight (kg)</label><input type="number" name="weight_kg"></div></div>
   <label>City</label><input name="city"></div>` : ''}
   <button style="width:100%">${reg ? 'Create account' : 'Login'}</button></form>
-  <p class="mut">${reg ? '<a href="#/login">Already have an account? Login</a>' : '<a href="#/register">New here? Register</a><br>Demo: admin@jeevandan.test / Demo@1234'}</p></div>`;
+  <p class="mut">${reg ? '<a href="#/login">Already have an account? Login</a>' : '<a href="#/register">New here? Register</a><br>Demo accounts (password: Demo@1234)<br>' + demoBtns + ''}</p></div>`;
+  document.querySelectorAll('[data-demo]').forEach((b) => (b.onclick = () => { const f = $('#af'); f.email.value = b.dataset.demo; f.password.value = 'Demo@1234'; }));
   const role = $('#role'); if (role) role.onchange = () => ($('#dn').style.display = role.value === 'DONOR' ? '' : 'none');
   $('#af').onsubmit = (e) => { e.preventDefault(); run(async () => accept(await api('POST', reg ? '/auth/register' : '/auth/login', form(e.target)))); };
 }
@@ -81,10 +85,7 @@ const V = {
       const a = b.dataset.act, body = a === 'reject' ? { remarks: prompt('Reason for rejection?') || '' } : {};
       await api('POST', `/requests/${id}/${a}`, body); toast('Done'); V.req(id);
     })));
-    if ($('#mt')) run(async () => {
-      const mt = await api('GET', `/requests/${id}/matches`);
-      $('#mt').innerHTML = '<h2>Matching</h2><pre style="white-space:pre-wrap;font-size:13px">' + esc(JSON.stringify(mt, null, 1).slice(0, 2500)) + '</pre>';
-    });
+    if ($('#mt')) run(() => matchesUI(id));
   },
   async find() {
     shell('find', `<div class="card"><h2>Find blood</h2><form id="sf" class="row"><div><label>Blood group needed</label><select name="bg">${opts(S.lk.bloodGroups, 'label', 'label', 'Any')}</select></div>
